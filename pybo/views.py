@@ -5,18 +5,28 @@ from .form import QuestionForm, AnswerForm
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db.models import Q
 
 
 # Create your views here.
 def index(request):
     page = request.GET.get('page', '1')
-
+    kw = request.GET.get('kw', '')
     question_list = Question.objects.order_by('-create_date')
+
+    if kw:
+        question_list = question_list.filter(
+            Q(subject__icontains=kw) |  # 제목 검색
+            Q(content__icontains=kw) |  # 내용 검색
+            Q(answer__content__icontains=kw) |  # 답변 내용 검색
+            Q(author__username__icontains=kw) |  # 질문 글쓴이 검색
+            Q(answer__author__username__icontains=kw)  # 답변 글쓴이 검색
+        ).distinct()
 
     paginator = Paginator(question_list, 10)
     page_obj = paginator.get_page(page)
 
-    context = {'question_list': page_obj}
+    context = {'question_list': page_obj, 'page': page, 'kw': kw}
     return render(request, 'pybo/question_list.html', context)
 
 
@@ -120,4 +130,24 @@ def answer_delete(request, answer_id):
         messages.error(request, '삭제권한이 없습니다.')
     else:
         answer.delete()
+    return redirect('pybo:detail', question_id=answer.question.id)
+
+
+@login_required(login_url='common:login')
+def question_vote(request, question_id):
+    question = get_object_or_404(Question, pk=question_id)
+    if request.user == question.author:
+        messages.error(request, '본인이 작성한 글은 추천할수 없습니다')
+    else:
+        question.voter.add(request.user)
+    return redirect('pybo:detail', question_id=question.id)
+
+
+@login_required(login_url='common:login')
+def answer_vote(request, answer_id):
+    answer = get_object_or_404(Answer, pk=answer_id)
+    if request.user == answer.author:
+        messages.error(request, '본인이 작성한 글은 추천할수 없습니다')
+    else:
+        answer.voter.add(request.user)
     return redirect('pybo:detail', question_id=answer.question.id)
