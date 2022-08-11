@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
-from .models import Question, Answer
-from .form import QuestionForm, AnswerForm
+from .models import Question, Answer, Proposal
+from .form import QuestionForm, AnswerForm, ProposalForm
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -23,7 +23,7 @@ def index(request):
             Q(answer__author__username__icontains=kw)  # 답변 글쓴이 검색
         ).distinct()
 
-    paginator = Paginator(question_list, 10)
+    paginator = Paginator(question_list, 20)
     page_obj = paginator.get_page(page)
 
     context = {'question_list': page_obj, 'page': page, 'kw': kw}
@@ -151,3 +151,18 @@ def answer_vote(request, answer_id):
     else:
         answer.voter.add(request.user)
     return redirect('pybo:detail', question_id=answer.question.id)
+
+
+@login_required(login_url='common:login')
+def proposal_create(request):
+    if request.method == 'POST':
+        form = ProposalForm(request.POST)
+        if form.is_valid():
+            proposal = form.save(commit=False)
+            proposal.create_date = timezone.now()
+            proposal.save()
+            return redirect('pybo:index')
+    else:
+        form = ProposalForm()
+    context = {'form': form}
+    return render(request, 'pybo/proposal_form.html', context)
